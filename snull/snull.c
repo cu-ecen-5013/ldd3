@@ -38,6 +38,8 @@
 #include <linux/in6.h>
 #include <asm/checksum.h>
 
+#include <linux/version.h>
+
 MODULE_AUTHOR("Alessandro Rubini, Jonathan Corbet");
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -520,7 +522,12 @@ int snull_tx(struct sk_buff *skb, struct net_device *dev)
 		len = ETH_ZLEN;
 		data = shortpkt;
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
 	dev->trans_start = jiffies; /* save the timestamp */
+#else
+    netdev_get_tx_queue(dev,0)->trans_start = jiffies; /* save the timestamp */
+#endif
+
 
 	/* Remember the skb, so we can free it at interrupt time */
 	priv->skb = skb;
@@ -568,6 +575,7 @@ struct net_device_stats *snull_stats(struct net_device *dev)
 	return &priv->stats;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 /*
  * This function is called to fill up an eth header, since arp is not
  * available on the interface
@@ -582,6 +590,7 @@ int snull_rebuild_header(struct sk_buff *skb)
 	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
 	return 0;
 }
+#endif
 
 
 int snull_header(struct sk_buff *skb, struct net_device *dev,
@@ -624,8 +633,12 @@ int snull_change_mtu(struct net_device *dev, int new_mtu)
 }
 
 static const struct header_ops snull_header_ops = {
-        .create  = snull_header,
-	.rebuild = snull_rebuild_header
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
+  .create  = snull_header,
+  .rebuild = snull_rebuild_header
+#else
+  .create  = snull_header
+#endif
 };
 
 static const struct net_device_ops snull_netdev_ops = {
@@ -717,8 +730,14 @@ int snull_init_module(void)
 
 	/* Allocate the devices */
 	snull_devs[0] = alloc_netdev(sizeof(struct snull_priv), "sn%d",
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,16,0)
+        NET_NAME_UNKNOWN,
+#endif
 			snull_init);
 	snull_devs[1] = alloc_netdev(sizeof(struct snull_priv), "sn%d",
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,16,0)
+        NET_NAME_UNKNOWN,
+#endif
 			snull_init);
 	if (snull_devs[0] == NULL || snull_devs[1] == NULL)
 		goto out;
